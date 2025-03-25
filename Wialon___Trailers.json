@@ -1,0 +1,736 @@
+{
+  "name": "Wialon - Trailers",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST"
+        ],
+        "path": "bd92c77d-7609-42db-9f8e-d9ecc8b39f2d",
+        "responseMode": "=onReceived",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        0
+      ],
+      "id": "cdad5812-facf-44b0-a45f-3e630c0a2f12",
+      "name": "Webhook",
+      "webhookId": "bd92c77d-7609-42db-9f8e-d9ecc8b39f2d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1958eb41-b562-41d2-963f-5893ec743ec5",
+              "name": "wialon_token",
+              "value": "1c4b404e06a303a7f0fec42403c39ab78EF2B6ABD93B46AB5DF297E14E49CE9305D8FB69",
+              "type": "string"
+            },
+            {
+              "id": "7205b945-7687-4c16-b177-c7d774713f68",
+              "name": "resource_id",
+              "value": 27371082,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4220,
+        0
+      ],
+      "id": "3088cd30-c94b-4624-aa90-7355e4c8e7e2",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=token/login&params={\"token\":\"{{ $json.wialon_token }}\",\"fl\":1}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4540,
+        0
+      ],
+      "id": "42972e0b-570a-4486-8b2c-39f8d83d7372",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7e9cbbf0-0cff-4d2c-8606-a881b3922e92",
+              "name": "wialon_session_id",
+              "value": "={{ $json.eid }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4840,
+        0
+      ],
+      "id": "ae3f2eab-ea9a-4441-bf0f-f309d3f6f7ee",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=core/search_items&params={\"spec\":{\"itemsType\":\"avl_resource\",\"propName\":\"sys_name\",\"propValueMask\":\"*\",\"sortType\":\"sys_name\"},\"force\":1,\"flags\":196609,\"from\":0,\"to\":0}&sid={{ $('HTTP Request').item.json.eid }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5040,
+        0
+      ],
+      "id": "7027f1b2-037e-4212-88ab-1e039433b844",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Step 1: Debug - Check if Code3 contains the expected value\nconst code3Output = $('Code3').first().json;\nconsole.log(\"🔹 Step 1 - Code3 Output:\", JSON.stringify(code3Output, null, 2));\n\n// ✅ Step 2: Extract `notification1` and ensure it's valid\nconst notification1 = code3Output.notification1;\n\nif (!notification1 || typeof notification1 !== \"string\") {\n    console.error(\"❌ ERROR: 'notification1' not found or invalid in Code3 output!\");\n    return [];\n}\n\n// ✅ Step 3: Convert `notification1` into an array if it's not already\nconst notificationList = Array.isArray(notification1) ? notification1 : [notification1];\n\nconsole.log(\"🔹 Step 3 - Extracted Notifications:\", JSON.stringify(notificationList, null, 2));\n\n// ✅ Step 4: Get the resource ID dynamically and convert it to a number\nconst resourceId = Number($('Edit Fields').first().json.resource_id);\n\nif (!resourceId) {\n    console.error(\"❌ ERROR: Resource ID not provided or invalid!\");\n    return [];\n}\n\n// ✅ Step 5: Find the account with the specific resource ID\nconst accountData = $input.first().json.items.find(item => item.id === resourceId);\n\nif (!accountData) {\n    console.error(`❌ ERROR: Account with ID ${resourceId} not found!`);\n    return [];\n}\n\n// ✅ Step 6: Extract trailer groups (`trlrsgr`) and trailers (`trlrs`)\nconst trailerGroups = accountData.trlrsgr || {};\nconst trailers = accountData.trlrs || {};\n\nconsole.log(\"🔹 Step 6 - Extracted Trailer Groups:\", JSON.stringify(trailerGroups, null, 2));\nconsole.log(\"🔹 Step 6 - Extracted Trailers:\", JSON.stringify(trailers, null, 2));\n\n// ✅ Step 7: Process trailer movements\nlet trailersToMove = [];\n\nfor (let notification of notificationList) {\n    let [trailer_name, new_group_name] = notification.split(',');\n\n    // ✅ Step 7.1: Handle missing `new_group_name`\n    if (!new_group_name || new_group_name.trim() === \"\") {\n        console.warn(`⚠️ WARNING: Trailer '${trailer_name}' has no destination group. Assigning to 'OTHER LOCATION'.`);\n        new_group_name = \"OTHER LOCATION\";\n    }\n\n    let trailerId = null;\n    let currentGroupId = null;\n\n    // ✅ Step 7.2: Find the trailer ID based on the name\n    for (let trailerKey in trailers) {\n        if (trailers[trailerKey].n === trailer_name.trim()) {\n            trailerId = trailers[trailerKey].id;\n            break;\n        }\n    }\n\n    if (!trailerId) {\n        console.warn(`⚠️ WARNING: Trailer '${trailer_name}' not found!`);\n        continue;\n    }\n\n    // ✅ Step 7.3: Find the current group of the trailer\n    for (let groupId in trailerGroups) {\n        let group = trailerGroups[groupId];\n        if (group.drs && group.drs.includes(trailerId)) {\n            currentGroupId = groupId;\n            break;\n        }\n    }\n\n    // ✅ Step 7.4: Find the new group ID based on the name\n    let newGroupId = null;\n    for (let groupId in trailerGroups) {\n        if (trailerGroups[groupId].n === new_group_name.trim()) {\n            newGroupId = groupId;\n            break;\n        }\n    }\n\n    // ✅ Step 7.5: If new_group_id is not found, set it to null\n    if (!newGroupId) {\n        console.warn(`⚠️ WARNING: Destination group '${new_group_name}' not found! Setting new_group_id as null.`);\n        newGroupId = null;\n    }\n\n    // ✅ Step 7.6: Add to the move list\n    trailersToMove.push({\n        trailer_id: trailerId,\n        current_group_id: currentGroupId,\n        new_group_id: newGroupId,\n        new_group_name: new_group_name.trim()\n    });\n}\n\n// ✅ Step 8: Debugging - Log final trailer movements\nconsole.log(\"🔹 Step 8 - Trailers to Move:\", JSON.stringify(trailersToMove, null, 2));\n\n// ✅ Step 9: Return the trailers to be moved\nreturn trailersToMove;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5260,
+        0
+      ],
+      "id": "829032f4-884c-4f69-bde2-3e8e4d7ff911",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7bdd9d02-457e-4616-94ef-3e073b7c85d0",
+              "leftValue": "={{ $json.new_group_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "bf3b9db2-486d-4fa2-9b9c-370ae6638607",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5440,
+        0
+      ],
+      "id": "19d88c16-08e5-407e-82e4-12610c6e806a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=resource/update_trailers_group&params={\"id\":0,\"n\":\"{{ $json.new_group_name }}\",\"d\":\"\",\"drs\":[],\"f\":2,\"itemId\":{{ $('Edit Fields').item.json.resource_id }},\"callMode\":\"create\"}&sid={{ $('HTTP Request').item.json.eid }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5720,
+        140
+      ],
+      "id": "21106b87-6ff7-4410-a46e-e614643af893",
+      "name": "HTTP Request2",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2f27184c-df55-4c10-b1be-e00193fcaf8b",
+              "leftValue": "={{ $json.current_group_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5660,
+        -100
+      ],
+      "id": "d7a6e705-53fc-4fe9-be44-098070435434",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Get resource and group IDs\nconst resourceId = Number($('Edit Fields').first().json.resource_id);\nconst sourceGroupId = Number($('Code').first().json.current_group_id); // Renombrado de currentGroupId\n\n// ✅ Find the resource in the available data\nconst accountData = $('HTTP Request1').first().json.items.find(item => item.id === resourceId);\n\nif (!accountData) {\n    console.error(`❌ ERROR: No data found for Resource ID ${resourceId}`);\n    return [{ json: { source_group_label: \"UNKNOWN\", source_group_id: sourceGroupId, trailers_after_removal: [] } }];\n}\n\n// ✅ Extract groups and trailers from the resource\nconst trailerGroups = accountData.trlrsgr || {};\nconst trailers = accountData.trlrs || {};\n\nconsole.log(\"🔹 Total Trailer Groups Found:\", Object.keys(trailerGroups).length);\nconsole.log(\"🔹 Total Trailers Found:\", Object.keys(trailers).length);\n\n// ✅ Verify if `sourceGroupId` exists\nif (!trailerGroups[sourceGroupId]) {\n    console.warn(`⚠️ WARNING: Source Group ID ${sourceGroupId} not found in resource ${resourceId}`);\n    return [{ json: { source_group_label: \"UNKNOWN\", source_group_id: sourceGroupId, trailers_after_removal: [] } }];\n}\n\n// ✅ Get the current group name\nconst sourceGroupLabel = trailerGroups[sourceGroupId].n || \"UNKNOWN\"; // Renombrado de currentGroupName\n\n// ✅ Get the list of trailers inside the current group\nlet trailersInSourceGroup = trailerGroups[sourceGroupId].drs || [];\n\nconsole.log(`🔹 Trailers in Group \"${sourceGroupLabel}\" (${sourceGroupId}) BEFORE removal:`, JSON.stringify(trailersInSourceGroup, null, 2));\n\n// ✅ Get the trailer to remove\nconst trailerIdToRemove = Number($('Code').first().json.trailer_id); // Renombrado de trailerToRemove\nconsole.log(\"🔹 Trailer to Remove:\", trailerIdToRemove);\n\n// ✅ Check if the trailer exists before removing\nif (!trailersInSourceGroup.includes(trailerIdToRemove)) {\n    console.warn(`⚠️ WARNING: Trailer ID ${trailerIdToRemove} NOT found in Group ID ${sourceGroupId}!`);\n}\n\n// ✅ Filter the list to remove the specified trailer\ntrailersInSourceGroup = trailersInSourceGroup.filter(trailerId => trailerId !== trailerIdToRemove);\n\nconsole.log(`🔹 Trailers in Group \"${sourceGroupLabel}\" (${sourceGroupId}) AFTER removal:`, JSON.stringify(trailersInSourceGroup, null, 2));\n\n// ✅ Return the updated group info\nreturn [{\n    json: {\n        source_group_label: sourceGroupLabel,  // Nombre del grupo de origen\n        source_group_id: sourceGroupId,  // ID del grupo de origen\n        trailers_after_removal: trailersInSourceGroup  // Tráileres restantes después de la eliminación\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5880,
+        0
+      ],
+      "id": "91e3af0b-1a3d-409b-bb9a-448425b1ec74",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=resource/update_trailers_group&params={\"id\":{{ $json.source_group_id }},\"n\":\"{{ $json.source_group_label }}\",\"d\":\"\",\"drs\":[{{ $json.trailers_after_removal }}],\"f\":2,\"itemId\":27371082,\"callMode\":\"update\"}&sid={{ $('HTTP Request').first().json.eid }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6100,
+        0
+      ],
+      "id": "96daa406-9e2f-49a0-a8a6-f30b46abb843",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=core/search_items&params={\"spec\":{\"itemsType\":\"avl_resource\",\"propName\":\"sys_name\",\"propValueMask\":\"*\",\"sortType\":\"sys_name\"},\"force\":1,\"flags\":196609,\"from\":0,\"to\":0}&sid={{ $('HTTP Request').first().json.eid }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6320,
+        -120
+      ],
+      "id": "fe3928c7-7114-4c2c-a64a-4b0c6c6f9ac6",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Obtener IDs del recurso, grupo y tráiler a agregar\nconst resourceId = Number($('Edit Fields').first().json.resource_id);\nconst targetGroupId = Number($('Code').first().json.new_group_id);\nconst trailerIdToAdd = Number($('Code').first().json.trailer_id);\n\nconsole.log(\"🔹 Resource ID:\", resourceId);\nconsole.log(\"🔹 Target Group ID:\", targetGroupId);\nconsole.log(\"🔹 Trailer ID to Add:\", trailerIdToAdd);\n\n// ✅ Buscar el recurso en los datos disponibles\nconst accountData = $('HTTP Request1').first().json.items.find(item => item.id === resourceId);\n\nif (!accountData) {\n    console.error(`❌ ERROR: No data found for Resource ID ${resourceId}`);\n    return [{ json: { target_group_id: targetGroupId, target_group_label: \"UNKNOWN\", trailers_list: [] } }];\n}\n\n// ✅ Extraer lista de grupos y tráileres del recurso\nconst trailerGroups = accountData.trlrsgr || {};\nconst trailers = accountData.trlrs || {};\n\nconsole.log(\"🔹 Total Trailer Groups Found:\", Object.keys(trailerGroups).length);\nconsole.log(\"🔹 Total Trailers Found:\", Object.keys(trailers).length);\n\n// ✅ Verificar si el grupo `targetGroupId` existe\nif (!trailerGroups[targetGroupId]) {\n    console.warn(`⚠️ WARNING: Target Group ID ${targetGroupId} not found in resource ${resourceId}`);\n    return [{ json: { target_group_id: targetGroupId, target_group_label: \"UNKNOWN\", trailers_list: [] } }];\n}\n\n// ✅ Obtener el nombre del grupo\nconst targetGroupLabel = trailerGroups[targetGroupId].n || \"UNKNOWN\"; // Renombrado de newGroupName\n\n// ✅ Obtener la lista de tráileres dentro del nuevo grupo\nlet trailersList = trailerGroups[targetGroupId].drs || [];\n\nconsole.log(`🔹 Trailers in Group \"${targetGroupLabel}\" (${targetGroupId}) BEFORE adding:`, JSON.stringify(trailersList, null, 2));\n\n// ✅ Verificar si el tráiler ya está en el grupo\nif (trailersList.includes(trailerIdToAdd)) {\n    console.warn(`⚠️ WARNING: Trailer ID ${trailerIdToAdd} is already in Group ID ${targetGroupId}!`);\n} else {\n    // ✅ Agregar el tráiler a la lista\n    trailersList.push(trailerIdToAdd);\n    console.log(`✅ Trailer ID ${trailerIdToAdd} added to Group \"${targetGroupLabel}\" (${targetGroupId}).`);\n}\n\nconsole.log(`🔹 Trailers in Group \"${targetGroupLabel}\" (${targetGroupId}) AFTER adding:`, JSON.stringify(trailersList, null, 2));\n\n// ✅ Devolver la lista actualizada en el formato correcto para n8n con nombres mejorados\nreturn [{\n    json: {\n        target_group_label: targetGroupLabel,  // Nombre del grupo de destino\n        target_group_id: targetGroupId,  // ID del grupo de destino\n        trailers_list: trailersList  // Lista de tráileres en el grupo después de agregar\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6540,
+        -120
+      ],
+      "id": "480e373a-2590-4b1a-b79e-cee6143fa8ce",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://hst-api.wialon.com/wialon/ajax.html?svc=resource/update_trailers_group&params={\"id\":{{ $('Code2').first().json.target_group_id }},\"n\":\"{{ $('Code2').first().json.target_group_label }}\",\"d\":\"\",\"drs\":[{{ $('Code2').first().json.trailers_list }}],\"f\":2,\"itemId\":{{ $('Edit Fields').first().json.resource_id }},\"callMode\":\"update\"}&sid={{ $('HTTP Request').first().json.eid }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6760,
+        -120
+      ],
+      "id": "888c99df-2370-4867-895c-d0e9cb715113",
+      "name": "HTTP Request5"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "notifications",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "data": "={{ JSON.stringify($json.body) }}",
+            "status": "pending"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2580,
+        0
+      ],
+      "id": "eaecb4b7-6e07-48e6-96f8-e4ec15c18ff9",
+      "name": "Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "lLQi2eYzoVInqHxL",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "notifications",
+          "mode": "list",
+          "cachedResultName": "notifications"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "processed",
+            "id": "={{ $('Postgres2').first().json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        7160,
+        540
+      ],
+      "id": "1aaf51be-9de2-4dad-b0f4-609f4de96e75",
+      "name": "Postgres1",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "lLQi2eYzoVInqHxL",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "notifications",
+          "mode": "list",
+          "cachedResultName": "notifications"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "status",
+              "value": "pending"
+            }
+          ]
+        },
+        "sort": {
+          "values": [
+            {
+              "column": "received_at"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3100,
+        0
+      ],
+      "id": "98c38b8a-2b93-4e72-b8d6-c326950b3b80",
+      "name": "Postgres2",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "lLQi2eYzoVInqHxL",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all input notifications from the previous node\nconst inputData = $input.first().json;\n\n// Ensure `data` is correctly accessed\nconst notifications = Array.isArray(inputData.data) ? inputData.data : [inputData];\n\n// Ensure there are notifications to process\nif (notifications.length === 0) {\n    return [{ json: { error: \"No pending notifications found\" } }];\n}\n\n// Find the notification with the lowest ID\nconst minIdNotification = notifications.reduce((prev, current) => {\n    return (prev.id < current.id) ? prev : current;\n});\n\n// Extract the first trailer key inside 'data' EXACTLY as it appears\nconst trailerKey = Object.keys(minIdNotification.data)[0] || \"\";\n\n// Return the exact trailer name, renaming the key to \"notification1\"\nreturn [{ json: { notification1: trailerKey } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        0
+      ],
+      "id": "b904ab12-631e-4648-8cdd-804a875161a4",
+      "name": "Code3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "Postgres2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres1": {
+      "main": [
+        [
+          {
+            "node": "Postgres2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres2": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "Postgres1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e9cba11a-fadd-46a7-a760-3b58c7d1c66d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c9f675b8ddd1fa90ce3955263518d531a08f0110a909fc139fe1a3d661f5dd78"
+  },
+  "id": "ZsIBJKiYYkunbwsS",
+  "tags": []
+}
